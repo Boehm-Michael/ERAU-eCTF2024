@@ -170,18 +170,29 @@ export CMSIS_ROOT
 # Where to find source files for this project.
 VPATH += .
 VPATH += src
+
+# eCTF Crypto Example
+ifeq ($(CRYPTO_EXAMPLE), 1)
+VPATH += wolfssl/wolfcrypt/src
+endif
+
 VPATH := $(VPATH)
 
 # Where to find header files for this project
 IPATH += .
 IPATH += include
+
+# eCTF Crypto Example
+ifeq ($(CRYPTO_EXAMPLE), 1)
+IPATH += wolfssl
+endif
+
 IPATH := $(IPATH)
 
 AUTOSEARCH ?= 1
 ifeq ($(AUTOSEARCH), 1)
-# Auto-detect all C/C++ source files on VPATH
+# Auto-detect all C source files on VPATH
 SRCS += $(wildcard $(addsuffix /*.c, $(VPATH)))
-SRCS += $(wildcard $(addsuffix /*.cpp, $(VPATH)))
 endif
 
 # Collapse SRCS before passing them on to the next stage
@@ -242,7 +253,18 @@ MXC_OPTIMIZE_CFLAGS ?= -O2
 
 # Set compiler flags
 PROJ_CFLAGS += -Wall # Enable warnings
+ifeq ($(CRYPTO_EXAMPLE), 1)
 PROJ_CFLAGS += -DMXC_ASSERT_ENABLE
+# eCTF Crypto Example - WolfSSL Flags
+PROJ_CFLAGS += -DNO_WOLFSSL_DIR
+PROJ_CFLAGS += -DWOLFSSL_AES_DIRECT
+PROJ_CFLAGS += -DCRYPTO_EXAMPLE=1
+endif
+PROJ_CFLAGS += -DMXC_ASSERT_ENABLE
+
+ifeq ($(POST_BOOT_ENABLED), 1)
+	PROJ_CFLAGS += -DPOST_BOOT=$(POST_BOOT_CODE)
+endif
 
 # Set hardware floating point acceleration.
 # Options are:
@@ -252,6 +274,22 @@ PROJ_CFLAGS += -DMXC_ASSERT_ENABLE
 MFLOAT_ABI ?= softfp
 # MFLOAT_ABI must be exported to other Makefiles
 export MFLOAT_ABI
+
+ifeq "$(RISCV_CORE)" ""
+# Default linkerfile is only specified for standard Arm-core projects.
+# Otherwise, gcc_riscv.mk sets the appropriate riscv linkerfile.
+LINKERFILE ?= $(TARGET_LC).ld
+LINKERPATH ?= $(CMSIS_ROOT)/Device/Maxim/$(TARGET_UC)/Source/GCC
+
+# Check if linkerfile exists
+ifeq ("$(wildcard $(LINKERPATH)/$(LINKERFILE))","")
+# Doesn't exists, attempt to use root project folder.
+LINKERPATH:=.
+endif
+
+# Form full path to linkerfile.  Works around MSYS2 edge case from (see MSDK-903).
+LINKERFILE:=$(LINKERPATH)/$(LINKERFILE)
+endif
 
 # This path contains system-level intialization files for the target micro.  Add to the build.
 VPATH += $(CMSIS_ROOT)/Device/Maxim/$(TARGET_UC)/Source
