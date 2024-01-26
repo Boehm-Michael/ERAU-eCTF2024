@@ -3,6 +3,11 @@
 .DS_Store
 .vscode/
 **/gcc
+application_processor/
+deployment/
+.cproject
+.project
+.settings/
 
 !device/lib
 
