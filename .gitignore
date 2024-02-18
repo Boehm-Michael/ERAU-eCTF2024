@@ -8,6 +8,7 @@ deployment/
 .cproject
 .project
 .settings/
+component/inc/ectf_params.h
 
 !device/lib
 
