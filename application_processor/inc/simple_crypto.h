@@ -11,9 +11,6 @@
  * @copyright Copyright (c) 2024 The MITRE Corporation
  */
 
-#if CRYPTO_EXAMPLE
-#ifndef ECTF_CRYPTO_H
-#define ECTF_CRYPTO_H
 
 #include "wolfssl/wolfcrypt/aes.h"
 #include "wolfssl/wolfcrypt/hash.h"
@@ -66,5 +63,3 @@ int decrypt_sym(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *plaintex
  */
 int hash(void *data, size_t len, uint8_t *hash_out);
 
-#endif // CRYPTO_EXAMPLE
-#endif // ECTF_CRYPTO_H

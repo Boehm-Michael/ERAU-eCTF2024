@@ -250,7 +250,6 @@ MXC_OPTIMIZE_CFLAGS ?= -O2
 
 # Set compiler flags
 PROJ_CFLAGS += -Wall # Enable warnings
-ifeq ($(CRYPTO_EXAMPLE), 1)
 PROJ_CFLAGS += -DMXC_ASSERT_ENABLE
 # eCTF Crypto Example - WolfSSL Flags
 PROJ_CFLAGS += -DNO_WOLFSSL_DIR
@@ -260,7 +259,6 @@ PROJ_CFLAGS += -DCRYPTO_EXAMPLE=1
 PROJ_CFLAGS += -DHAVE_PK_CALLBACKS                                                               
 PROJ_CFLAGS += -DWOLFSSL_USER_IO                                                                 
 PROJ_CFLAGS += -DNO_WRITEV -DTIME_T_NOT_64BIT                                                    
-endif
 PROJ_CFLAGS += -DMXC_ASSERT_ENABLE
 
 ifeq ($(POST_BOOT_ENABLED), 1)
