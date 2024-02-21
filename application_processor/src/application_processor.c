@@ -11,6 +11,8 @@
  * @copyright Copyright (c) 2024 The MITRE Corporation
  */
 
+#define CRYPTO_EXAMPLE 1
+
 #include "board.h"
 #include "i2c.h"
 #include "icc.h"
