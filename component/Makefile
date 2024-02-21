@@ -171,10 +171,8 @@ export CMSIS_ROOT
 VPATH += .
 VPATH += src
 
-# eCTF Crypto Example
-ifeq ($(CRYPTO_EXAMPLE), 1)
+#WolfSSL
 VPATH += wolfssl/wolfcrypt/src
-endif
 
 VPATH := $(VPATH)
 
@@ -182,10 +180,9 @@ VPATH := $(VPATH)
 IPATH += .
 IPATH += include
 
-# eCTF Crypto Example
-ifeq ($(CRYPTO_EXAMPLE), 1)
+#WolfSSL
 IPATH += wolfssl
-endif
+
 
 IPATH := $(IPATH)
 
