@@ -327,8 +327,16 @@ void boot() {
     uint8_t key[KEY_SIZE];
     
     // Zero out the key
-    bzero(key, BLOCK_SIZE);
+    bzero(key, BLOCK_SIZE); // Sets key to all 0s... this is bad... obviously - Michael
 
+    
+    /***************************** EXAMPLE CRYPTO *******************************/
+    //
+    //
+    // This shows how to use the WolfSSL library, do not use in secure_receive
+    // or secure_send.
+    //
+    /****************************** EXAMPLE CRYPTO *******************************/
     // Encrypt example data and print out
     encrypt_sym((uint8_t*)data, BLOCK_SIZE, key, ciphertext); 
     print_debug("Encrypted data: ");
