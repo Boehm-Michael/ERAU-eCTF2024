@@ -44,6 +44,8 @@
 /* Place OS specific preprocessor flags, defines, includes here, will be
    included into every file because types.h includes it */
 
+// Added by ERAU because /dev/(u)random doesn't exist on the MAX 78000FTHR
+#define NO_DEV_RANDOM
 
 #ifndef WOLF_CRYPT_SETTINGS_H
 #define WOLF_CRYPT_SETTINGS_H
