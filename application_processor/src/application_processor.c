@@ -123,7 +123,7 @@ static const byte hardcoded_secret[] = { /* ... secret bytes ... */ };
 */
 int secure_send(uint8_t address, byte* buffer, int len) {
     byte encryptedBuffer[MAX_BUFFER_SIZE]; // Ensure this buffer is large enough for the encrypted data
-
+    Aes aes;
 
     // Assuming the AES key has already been securely exchanged and initialized in `aes`
     wc_AesSetKey(aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
@@ -148,7 +148,7 @@ int secure_send(uint8_t address, byte* buffer, int len) {
 */
 int secure_receive(i2c_addr_t address, byte* buffer) {
     byte encryptedBuffer[MAX_BUFFER_SIZE]; // Buffer to receive encrypted data
-
+    Aes aes;
     // Receive the encrypted data
     int receivedLen = poll_and_receive_packet(address, encryptedBuffer);
 
