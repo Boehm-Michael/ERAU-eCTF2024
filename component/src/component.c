@@ -28,7 +28,7 @@
 #include "ectf_params.h"
 #include "global_secrets.h"
 
-#include <wolfssl/openssl/options.h>
+// #include <wolfssl/openssl/options.h>
 #include <wolfssl/openssl/aes.h>
 #include <wolfssl/openssl/random.h>
 #include <wolfssl/openssl/sha256.h>
