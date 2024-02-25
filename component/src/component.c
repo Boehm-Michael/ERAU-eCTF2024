@@ -277,7 +277,7 @@ void process_validate() {
 
     // Derive the key from the hardcoded secret
     if (derive_key_from_secret() != SUCCESS_RETURN) {
-        print_error("Key derivation failed\n");
+        printf("Key derivation failed\n");
         return;
     }
 
