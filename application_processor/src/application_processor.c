@@ -38,7 +38,6 @@
 #include "ectf_params.h"
 #include "global_secrets.h"
 
-// #include <wolfssl/openssl/options.h>
 #include <wolfssl/wolfcrypt/aes.h>
 #include <wolfssl/wolfcrypt/random.h>
 #include <wolfssl/wolfcrypt/sha256.h>
@@ -122,8 +121,9 @@ static const byte hardcoded_secret[] = { /* ... secret bytes ... */ };
  * This function must be implemented by your team to align with the security requirements.
 
 */
-int secure_send(uint8_t address, byte* buffer, int len, Aes* aes) {
+int secure_send(uint8_t address, byte* buffer, int len) {
     byte encryptedBuffer[MAX_BUFFER_SIZE]; // Ensure this buffer is large enough for the encrypted data
+
 
     // Assuming the AES key has already been securely exchanged and initialized in `aes`
     wc_AesSetKey(aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
@@ -146,7 +146,7 @@ int secure_send(uint8_t address, byte* buffer, int len, Aes* aes) {
  * Securely receive data over I2C. This function is utilized in POST_BOOT functionality.
  * This function must be implemented by your team to align with the security requirements.
 */
-int secure_receive(i2c_addr_t address, byte* buffer, Aes* aes) {
+int secure_receive(i2c_addr_t address, byte* buffer) {
     byte encryptedBuffer[MAX_BUFFER_SIZE]; // Buffer to receive encrypted data
 
     // Receive the encrypted data
