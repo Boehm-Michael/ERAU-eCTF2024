@@ -38,6 +38,12 @@
 #include "ectf_params.h"
 #include "global_secrets.h"
 
+#include <wolfssl/options.h>
+#include <wolfssl/wolfcrypt/aes.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <wolfssl/wolfcrypt/sha256.h>
+
+
 /********************************* CONSTANTS **********************************/
 
 // Passed in through ectf-params.h
@@ -49,6 +55,9 @@
 #define COMPONENT_CNT 2
 #define AP_BOOT_MSG "Test boot message"
 */
+#define AES_KEY_SIZE 32 // For AES-256
+#define MAX_BUFFER_SIZE 1024 // Might need adjustment
+
 
 // Flash Macros
 #define FLASH_ADDR ((MXC_FLASH_MEM_BASE + MXC_FLASH_MEM_SIZE) - (2 * MXC_FLASH_PAGE_SIZE))
@@ -97,6 +106,9 @@ typedef enum {
 /********************************* GLOBAL VARIABLES **********************************/
 // Variable for information stored in flash memory
 flash_entry flash_status;
+byte aes_key[AES_KEY_SIZE] = { /* Initialize with AES key bytes */ };
+byte iv[AES_BLOCK_SIZE]; // AES_BLOCK_SIZE is typically 16 bytes for AES
+static const byte hardcoded_secret[] = { /* ... secret bytes ... */ };
 
 /******************************* POST BOOT FUNCTIONALITY *********************************/
 /**
@@ -110,8 +122,17 @@ flash_entry flash_status;
  * This function must be implemented by your team to align with the security requirements.
 
 */
-int secure_send(uint8_t address, uint8_t* buffer, uint8_t len) {
-    return send_packet(address, len, buffer);
+int secure_send(uint8_t address, byte* buffer, int len, Aes* aes) {
+    byte encryptedBuffer[MAX_BUFFER_SIZE]; // Ensure this buffer is large enough for the encrypted data
+
+    // Assuming the AES key has already been securely exchanged and initialized in `aes`
+    wc_AesSetKey(aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
+    wc_AesCbcEncrypt(aes, encryptedBuffer, buffer, len);
+
+    // Now `encryptedBuffer` contains the encrypted data, which can be sent using `send_packet`
+    send_packet(address, encryptedBuffer, len); // Adjust len as needed based on encryption
+
+    return 0; // Simplified return for example purposes
 }
 
 /**
@@ -125,8 +146,17 @@ int secure_send(uint8_t address, uint8_t* buffer, uint8_t len) {
  * Securely receive data over I2C. This function is utilized in POST_BOOT functionality.
  * This function must be implemented by your team to align with the security requirements.
 */
-int secure_receive(i2c_addr_t address, uint8_t* buffer) {
-    return poll_and_receive_packet(address, buffer);
+int secure_receive(i2c_addr_t address, byte* buffer, Aes* aes) {
+    byte encryptedBuffer[MAX_BUFFER_SIZE]; // Buffer to receive encrypted data
+
+    // Receive the encrypted data
+    int receivedLen = poll_and_receive_packet(address, encryptedBuffer);
+
+    // Assuming the AES key has already been securely exchanged and initialized in `aes`
+    wc_AesSetKey(aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
+    wc_AesCbcDecrypt(aes, buffer, encryptedBuffer, receivedLen); // Adjust `receivedLen` as needed
+
+    return receivedLen; // Simplified return for example purposes
 }
 
 /**
@@ -146,6 +176,67 @@ int get_provisioned_ids(uint32_t* buffer) {
 }
 
 /********************************* UTILITIES **********************************/
+
+int derive_key_from_secret() {
+    // If the hardcoded secret is not the correct length, hash it to get the key
+    int ret = wc_Sha256Hash(hardcoded_secret, sizeof(hardcoded_secret), aes_key);
+    return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
+}
+
+int generate_random_message(byte* message, int message_len) {
+    RNG rng;
+    int ret = wc_InitRng(&rng);
+    if (ret != 0) return ERROR_RETURN;
+
+    ret = wc_RNG_GenerateBlock(&rng, message, message_len);
+    wc_FreeRng(&rng);
+    return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
+}
+
+int encrypt_message(const byte* plaintext, int plaintext_len, byte* ciphertext, byte* iv) {
+    // Generate a random IV
+    RNG rng;
+    int ret = wc_InitRng(&rng);
+    if (ret != 0) return ERROR_RETURN;
+
+    ret = wc_RNG_GenerateBlock(&rng, iv, AES_BLOCK_SIZE);
+    wc_FreeRng(&rng);
+    if (ret != 0) return ERROR_RETURN;
+
+    // Encrypt the plaintext
+    Aes aes;
+    wc_AesInit(&aes, NULL, INVALID_DEVID);
+    ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, iv, AES_ENCRYPTION);
+    if (ret != 0) {
+        wc_AesFree(&aes);
+        return ERROR_RETURN;
+    }
+
+    ret = wc_AesCbcEncrypt(&aes, ciphertext, plaintext, plaintext_len);
+    wc_AesFree(&aes);
+
+    return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
+}
+
+int decrypt_message(const byte* ciphertext, int ciphertext_len, byte* plaintext, const byte* iv) {
+    // Initialize AES context for decryption
+    Aes aes;
+    int ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
+    if (ret != 0) return ERROR_RETURN;
+
+    // Set the AES key and IV for decryption
+    ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, iv, AES_DECRYPTION);
+    if (ret != 0) {
+        wc_AesFree(&aes);
+        return ERROR_RETURN;
+    }
+
+    // Decrypt the ciphertext
+    ret = wc_AesCbcDecrypt(&aes, plaintext, ciphertext, ciphertext_len);
+    wc_AesFree(&aes);
+
+    return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
+}
 
 // Initialize the device
 // This must be called on startup to initialize the flash and i2c interfaces
@@ -231,32 +322,77 @@ int scan_components() {
 }
 
 int validate_components() {
+    // Derive the key from the hardcoded secret
+    if (derive_key_from_secret() != SUCCESS_RETURN) {
+        print_error("Key derivation failed\n");
+        return ERROR_RETURN;
+    }
+
     // Buffers for board link communication
     uint8_t receive_buffer[MAX_I2C_MESSAGE_LEN];
     uint8_t transmit_buffer[MAX_I2C_MESSAGE_LEN];
 
-    // Send validate command to each component
+    // Iterate over each component
     for (unsigned i = 0; i < flash_status.component_cnt; i++) {
+        // Generate a random starting sequence number
+        uint32_t random_seq_num;
+        RNG rng;
+        wc_InitRng(&rng);
+        wc_RNG_GenerateBlock(&rng, (byte*)&random_seq_num, sizeof(random_seq_num));
+        wc_FreeRng(&rng);
+
+        // Generate a random message
+        byte random_message[16];
+        if (generate_random_message(random_message, sizeof(random_message)) != SUCCESS_RETURN) {
+            print_error("Random message generation failed\n");
+            return ERROR_RETURN;
+        }
+
         // Set the I2C address of the component
         i2c_addr_t addr = component_id_to_i2c_addr(flash_status.component_ids[i]);
 
-        // Create command message
-        command_message* command = (command_message*) transmit_buffer;
-        command->opcode = COMPONENT_CMD_VALIDATE;
-        
-        // Send out command and receive result
+        // Prepare the data to send (random_seq_num + random_message)
+        byte data_to_send[20]; // 4 bytes of seq_num + 16 bytes of message
+        memcpy(data_to_send, &random_seq_num, sizeof(random_seq_num));
+        memcpy(data_to_send + sizeof(random_seq_num), random_message, sizeof(random_message));
+
+        // Encrypt the data
+        byte iv[AES_BLOCK_SIZE];
+        byte encrypted_data[sizeof(data_to_send) + AES_BLOCK_SIZE]; // Account for padding
+        if (encrypt_message(data_to_send, sizeof(data_to_send), encrypted_data, iv) != SUCCESS_RETURN) {
+            print_error("Data encryption failed\n");
+            return ERROR_RETURN;
+        }
+
+        // Send the encrypted data and IV to the component
+        memcpy(transmit_buffer, encrypted_data, sizeof(encrypted_data));
+        memcpy(transmit_buffer + sizeof(encrypted_data), iv, AES_BLOCK_SIZE);
         int len = issue_cmd(addr, transmit_buffer, receive_buffer);
         if (len == ERROR_RETURN) {
             print_error("Could not validate component\n");
             return ERROR_RETURN;
         }
 
-        validate_message* validate = (validate_message*) receive_buffer;
-        // Check that the result is correct
-        if (validate->component_id != flash_status.component_ids[i]) {
-            print_error("Component ID: 0x%08x invalid\n", flash_status.component_ids[i]);
+        // Decrypt the response
+        byte decrypted_response[sizeof(data_to_send)];
+        if (decrypt_message(receive_buffer, len - AES_BLOCK_SIZE, decrypted_response, iv) != SUCCESS_RETURN) {
+            print_error("Response decryption failed\n");
             return ERROR_RETURN;
         }
+
+        // Extract the sequence number and message from the decrypted response
+        uint32_t received_seq_num;
+        byte received_message[16];
+        memcpy(&received_seq_num, decrypted_response, sizeof(received_seq_num));
+        memcpy(received_message, decrypted_response + sizeof(received_seq_num), sizeof(received_message));
+
+        // Check that the sequence number is incremented by 1 and the message is the same
+        if (received_seq_num != random_seq_num + 1 || 
+            memcmp(received_message, random_message, sizeof(received_message)) != 0) {
+            print_error("Component validation failed\n");
+            return ERROR_RETURN;
+        }
+        //Logic for sequence number reuse goes here.
     }
     return SUCCESS_RETURN;
 }

@@ -28,6 +28,11 @@
 #include "ectf_params.h"
 #include "global_secrets.h"
 
+#include <wolfssl/options.h>
+#include <wolfssl/wolfcrypt/aes.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <wolfssl/wolfcrypt/sha256.h>
+
 #ifdef POST_BOOT
 #include "led.h"
 #include <stdint.h>
@@ -46,6 +51,9 @@
 #define ATTESTATION_DATE "08/08/08"
 #define ATTESTATION_CUSTOMER "Fritz"
 */
+#define AES_KEY_SIZE 32 // For AES-256
+#define MAX_BUFFER_SIZE 1024 // Might need adjustment
+
 
 /******************************** TYPE DEFINITIONS ********************************/
 // Commands received by Component using 32 bit integer
@@ -84,36 +92,105 @@ void process_attest(void);
 // Global varaibles
 uint8_t receive_buffer[MAX_I2C_MESSAGE_LEN];
 uint8_t transmit_buffer[MAX_I2C_MESSAGE_LEN];
-
+static const byte hardcoded_secret[] = { /* ... secret bytes ... */ };
+byte aes_key[SHA256_DIGEST_SIZE]; // Use SHA256 hash size for the key
+byte iv[AES_BLOCK_SIZE]; // AES_BLOCK_SIZE is typically 16 bytes for AES
 /******************************* POST BOOT FUNCTIONALITY *********************************/
 /**
- * @brief Secure Send 
+ * @brief Securely send data over I2C using AES encryption.
  * 
- * @param buffer: uint8_t*, pointer to data to be send
- * @param len: uint8_t, size of data to be sent 
- * 
- * Securely send data over I2C. This function is utilized in POST_BOOT functionality.
- * This function must be implemented by your team to align with the security requirements.
-*/
+ * @param buffer Pointer to the plaintext data to be sent.
+ * @param len Length of the plaintext data.
+ */
 void secure_send(uint8_t* buffer, uint8_t len) {
-    send_packet_and_ack(len, buffer); 
+    Aes aes;
+    byte encryptedBuffer[MAX_BUFFER_SIZE]; // Ensure this buffer is large enough for the encrypted data
+
+    // Initialize AES for encryption with the pre-shared key and IV
+    wc_AesInit(&aes, NULL, INVALID_DEVID);
+    wc_AesSetKey(&aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
+    wc_AesCbcEncrypt(&aes, encryptedBuffer, buffer, len);
+
+    // Send the encrypted data over I2C
+    send_packet_and_ack(len + AES_BLOCK_SIZE, encryptedBuffer); // Include padding in the length
+
+    wc_AesFree(&aes); // Free AES structure
 }
 
 /**
- * @brief Secure Receive
+ * @brief Securely receive data over I2C using AES decryption.
  * 
- * @param buffer: uint8_t*, pointer to buffer to receive data to
- * 
- * @return int: number of bytes received, negative if error
- * 
- * Securely receive data over I2C. This function is utilized in POST_BOOT functionality.
- * This function must be implemented by your team to align with the security requirements.
-*/
+ * @param buffer Pointer to the buffer where decrypted data will be stored.
+ * @return int Number of bytes received and decrypted, negative on error.
+ */
 int secure_receive(uint8_t* buffer) {
-    return wait_and_receive_packet(buffer);
+    Aes aes;
+    byte encryptedBuffer[MAX_BUFFER_SIZE]; // Buffer to receive encrypted data
+
+    // Receive the encrypted data over I2C
+    int receivedLen = wait_and_receive_packet(encryptedBuffer);
+
+    if (receivedLen <= 0) {
+        return -1; // Error or no data received
+    }
+
+    // Initialize AES for decryption with the pre-shared key and IV
+    wc_AesInit(&aes, NULL, INVALID_DEVID);
+    wc_AesSetKey(&aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
+    wc_AesCbcDecrypt(&aes, buffer, encryptedBuffer, receivedLen);
+
+    wc_AesFree(&aes); // Free AES structure
+
+    // Assuming the plaintext is the same length as the ciphertext minus padding
+    return receivedLen - AES_BLOCK_SIZE; // Adjust based on your padding scheme
 }
 
 /******************************* FUNCTION DEFINITIONS *********************************/
+
+int encrypt_message(const byte* plaintext, int plaintext_len, byte* ciphertext, byte* iv) {
+    // Generate a random IV
+    RNG rng;
+    int ret = wc_InitRng(&rng);
+    if (ret != 0) return ERROR_RETURN;
+
+    ret = wc_RNG_GenerateBlock(&rng, iv, AES_BLOCK_SIZE);
+    wc_FreeRng(&rng);
+    if (ret != 0) return ERROR_RETURN;
+
+    // Encrypt the plaintext
+    Aes aes;
+    wc_AesInit(&aes, NULL, INVALID_DEVID);
+    ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, iv, AES_ENCRYPTION);
+    if (ret != 0) {
+        wc_AesFree(&aes);
+        return ERROR_RETURN;
+    }
+
+    ret = wc_AesCbcEncrypt(&aes, ciphertext, plaintext, plaintext_len);
+    wc_AesFree(&aes);
+
+    return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
+}
+
+int decrypt_message(const byte* ciphertext, int ciphertext_len, byte* plaintext, const byte* iv) {
+    // Initialize AES context for decryption
+    Aes aes;
+    int ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
+    if (ret != 0) return ERROR_RETURN;
+
+    // Set the AES key and IV for decryption
+    ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, iv, AES_DECRYPTION);
+    if (ret != 0) {
+        wc_AesFree(&aes);
+        return ERROR_RETURN;
+    }
+
+    // Decrypt the ciphertext
+    ret = wc_AesCbcDecrypt(&aes, plaintext, ciphertext, ciphertext_len);
+    wc_AesFree(&aes);
+
+    return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
+}
 
 // Example boot sequence
 // Your design does not need to change this
@@ -188,11 +265,52 @@ void process_scan() {
     send_packet_and_ack(sizeof(scan_message), transmit_buffer);
 }
 
+int derive_key_from_secret() {
+    // If the hardcoded secret is not the correct length, hash it to get the key
+    int ret = wc_Sha256Hash(hardcoded_secret, sizeof(hardcoded_secret), aes_key);
+    return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
+}
+
 void process_validate() {
-    // The AP requested a validation. Respond with the Component ID
-    validate_message* packet = (validate_message*) transmit_buffer;
-    packet->component_id = COMPONENT_ID;
-    send_packet_and_ack(sizeof(validate_message), transmit_buffer);
+    // The AP has requested validation.
+    uint8_t decrypted_data[20]; // Adjust size as needed for your message + sequence number
+    uint8_t iv[AES_BLOCK_SIZE]; // The IV should be received alongside the message
+
+    // Derive the key from the hardcoded secret
+    if (derive_key_from_secret() != SUCCESS_RETURN) {
+        print_error("Key derivation failed\n");
+        return;
+    }
+
+    // Assuming the first part of the received data is the IV
+    memcpy(iv, receive_buffer, AES_BLOCK_SIZE);
+
+    int total_length = sizeof(receive_buffer);
+    int ciphertext_len = total_length - AES_BLOCK_SIZE; // Calculate the length of the ciphertext
+
+    // Decrypt the message after the IV
+    if (decrypt_message(receive_buffer + AES_BLOCK_SIZE, ciphertext_len, decrypted_data, iv) != SUCCESS_RETURN) {
+        printf("Error: Decryption failed\n");
+        return;
+    }
+
+    // Increment the sequence number by 1
+    uint32_t seq_num;
+    memcpy(&seq_num, decrypted_data, sizeof(seq_num)); // Extract sequence number
+    seq_num += 1; // Increment sequence number
+
+    // Prepare the response data: copy the incremented sequence number back into the buffer
+    memcpy(decrypted_data, &seq_num, sizeof(seq_num));
+
+    // Encrypt the response data
+    uint8_t encrypted_response[sizeof(decrypted_data) + AES_BLOCK_SIZE]; // Adjust for potential padding due to encryption
+    if (encrypt_message(decrypted_data, sizeof(decrypted_data), encrypted_response, iv) != SUCCESS_RETURN) {
+        printf("Error: Encryption failed\n");
+        return;
+    }
+
+    // Send the encrypted response back
+    send_packet_and_ack(sizeof(encrypted_response), encrypted_response);
 }
 
 void process_attest() {
