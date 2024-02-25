@@ -107,7 +107,7 @@ void secure_send(uint8_t* buffer, uint8_t len) {
 
     // Initialize AES for encryption with the pre-shared key and IV
     wc_AesInit(&aes, NULL, INVALID_DEVID);
-    wc_AesSetKey(&aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
+    wc_AesSetKey(*aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
     wc_AesCbcEncrypt(&aes, encryptedBuffer, buffer, len);
 
     // Send the encrypted data over I2C
@@ -135,7 +135,7 @@ int secure_receive(uint8_t* buffer) {
 
     // Initialize AES for decryption with the pre-shared key and IV
     wc_AesInit(&aes, NULL, INVALID_DEVID);
-    wc_AesSetKey(&aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
+    wc_AesSetKey(*aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
     wc_AesCbcDecrypt(&aes, buffer, encryptedBuffer, receivedLen);
 
     wc_AesFree(&aes); // Free AES structure

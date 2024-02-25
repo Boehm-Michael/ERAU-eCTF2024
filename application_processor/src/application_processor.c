@@ -126,7 +126,7 @@ int secure_send(uint8_t address, byte* buffer, int len) {
     Aes aes;
 
     // Assuming the AES key has already been securely exchanged and initialized in `aes`
-    wc_AesSetKey(aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
+    wc_AesSetKey(*aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
     wc_AesCbcEncrypt(aes, encryptedBuffer, buffer, len);
 
     // Now `encryptedBuffer` contains the encrypted data, which can be sent using `send_packet`
@@ -153,7 +153,7 @@ int secure_receive(i2c_addr_t address, byte* buffer) {
     int receivedLen = poll_and_receive_packet(address, encryptedBuffer);
 
     // Assuming the AES key has already been securely exchanged and initialized in `aes`
-    wc_AesSetKey(aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
+    wc_AesSetKey(*aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
     wc_AesCbcDecrypt(aes, buffer, encryptedBuffer, receivedLen); // Adjust `receivedLen` as needed
 
     return receivedLen; // Simplified return for example purposes
