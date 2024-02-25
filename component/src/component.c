@@ -25,7 +25,7 @@
 #include "board_link.h"
 
 // Includes from containerized build
-#include "ectf_params.h"
+// #include "ectf_params.h"
 #include "global_secrets.h"
 
 #include <wolfssl/wolfcrypt/aes.h>
@@ -44,15 +44,15 @@
 // Passed in through ectf-params.h
 // Example of format of ectf-params.h shown here
 /*
-#define COMPONENT_ID 0x11111124
-#define COMPONENT_BOOT_MSG "Component boot"
-#define ATTESTATION_LOC "McLean"
-#define ATTESTATION_DATE "08/08/08"
-#define ATTESTATION_CUSTOMER "Fritz"
+
 */
 #define AES_KEY_SIZE 32 // For AES-256
 #define MAX_BUFFER_SIZE 1024 // Might need adjustment
-
+#define COMPONENT_BOOT_MSG "Component boot"
+#define COMPONENT_ID 0x11111124
+#define ATTESTATION_LOC "McLean"
+#define ATTESTATION_DATE "08/08/08"
+#define ATTESTATION_CUSTOMER "Fritz"
 
 /******************************** TYPE DEFINITIONS ********************************/
 // Commands received by Component using 32 bit integer
@@ -107,7 +107,7 @@ void secure_send(uint8_t* buffer, uint8_t len) {
 
     // Initialize AES for encryption with the pre-shared key and IV
     wc_AesInit(&aes, NULL, INVALID_DEVID);
-    wc_AesSetKey(*aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
+    wc_AesSetKey(&aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION); // Pass the address of `aes`
     wc_AesCbcEncrypt(&aes, encryptedBuffer, buffer, len);
 
     // Send the encrypted data over I2C
@@ -135,7 +135,7 @@ int secure_receive(uint8_t* buffer) {
 
     // Initialize AES for decryption with the pre-shared key and IV
     wc_AesInit(&aes, NULL, INVALID_DEVID);
-    wc_AesSetKey(*aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
+    wc_AesSetKey(&aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION); // Pass the address of `aes`
     wc_AesCbcDecrypt(&aes, buffer, encryptedBuffer, receivedLen);
 
     wc_AesFree(&aes); // Free AES structure

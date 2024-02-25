@@ -125,15 +125,24 @@ int secure_send(uint8_t address, byte* buffer, int len) {
     byte encryptedBuffer[MAX_BUFFER_SIZE]; // Ensure this buffer is large enough for the encrypted data
     Aes aes;
 
-    // Assuming the AES key has already been securely exchanged and initialized in `aes`
-    wc_AesSetKey(*aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
-    wc_AesCbcEncrypt(aes, encryptedBuffer, buffer, len);
+    // Initialize the AES structure for encryption
+    wc_AesInit(&aes, NULL, INVALID_DEVID);
 
-    // Now `encryptedBuffer` contains the encrypted data, which can be sent using `send_packet`
+    // Set the AES key and IV for encryption
+    wc_AesSetKey(&aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
+
+    // Encrypt the buffer
+    wc_AesCbcEncrypt(&aes, encryptedBuffer, buffer, len);
+
+    // Send the encrypted data
     send_packet(address, encryptedBuffer, len); // Adjust len as needed based on encryption
+
+    // Free the AES structure
+    wc_AesFree(&aes);
 
     return 0; // Simplified return for example purposes
 }
+
 
 /**
  * @brief Secure Receive
@@ -149,14 +158,23 @@ int secure_send(uint8_t address, byte* buffer, int len) {
 int secure_receive(i2c_addr_t address, byte* buffer) {
     byte encryptedBuffer[MAX_BUFFER_SIZE]; // Buffer to receive encrypted data
     Aes aes;
+
     // Receive the encrypted data
     int receivedLen = poll_and_receive_packet(address, encryptedBuffer);
 
-    // Assuming the AES key has already been securely exchanged and initialized in `aes`
-    wc_AesSetKey(*aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
-    wc_AesCbcDecrypt(aes, buffer, encryptedBuffer, receivedLen); // Adjust `receivedLen` as needed
+    // Initialize the AES structure for decryption
+    wc_AesInit(&aes, NULL, INVALID_DEVID);
 
-    return receivedLen; // Simplified return for example purposes
+    // Set the AES key and IV for decryption
+    wc_AesSetKey(&aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
+
+    // Decrypt the buffer
+    wc_AesCbcDecrypt(&aes, buffer, encryptedBuffer, receivedLen);
+
+    // Free the AES structure
+    wc_AesFree(&aes);
+
+    return receivedLen; // Return the length of the decrypted data
 }
 
 /**
