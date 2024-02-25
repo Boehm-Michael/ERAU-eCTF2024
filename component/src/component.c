@@ -28,10 +28,9 @@
 #include "ectf_params.h"
 #include "global_secrets.h"
 
-// #include <wolfssl/openssl/options.h>
-#include <wolfssl/openssl/aes.h>
-#include <wolfssl/openssl/random.h>
-#include <wolfssl/openssl/sha256.h>
+#include <wolfssl/wolfcrypt/aes.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <wolfssl/wolfcrypt/sha256.h>
 
 #ifdef POST_BOOT
 #include "led.h"
