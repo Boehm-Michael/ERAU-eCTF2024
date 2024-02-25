@@ -87,6 +87,8 @@ void process_boot(void);
 void process_scan(void);
 void process_validate(void);
 void process_attest(void);
+int aes_decrypt(const uint8_t* ciphertext, uint8_t* plaintext, const uint8_t* iv);
+int aes_encrypt(const uint8_t* plaintext, uint8_t* ciphertext, const uint8_t* iv);
 
 /********************************* GLOBAL VARIABLES **********************************/
 // Global varaibles
@@ -273,29 +275,43 @@ int derive_key_from_secret() {
 
 void process_validate() {
     // The AP has requested validation.
+<<<<<<< Updated upstream
+=======
+    // Decrypt the received message, which contains the random message and sequence number
+>>>>>>> Stashed changes
     uint8_t decrypted_data[20]; // Adjust size as needed for your message + sequence number
     uint8_t iv[AES_BLOCK_SIZE]; // The IV should be received alongside the message
 
     // Derive the key from the hardcoded secret
     if (derive_key_from_secret() != SUCCESS_RETURN) {
         print_error("Key derivation failed\n");
+<<<<<<< Updated upstream
         return;
+=======
+        return ERROR_RETURN;
+>>>>>>> Stashed changes
     }
 
     // Assuming the first part of the received data is the IV
     memcpy(iv, receive_buffer, AES_BLOCK_SIZE);
 
+<<<<<<< Updated upstream
     int total_length = sizeof(receive_buffer);
     int ciphertext_len = total_length - AES_BLOCK_SIZE; // Calculate the length of the ciphertext
 
     // Decrypt the message after the IV
     if (decrypt_message(receive_buffer + AES_BLOCK_SIZE, ciphertext_len, decrypted_data, iv) != SUCCESS_RETURN) {
+=======
+    // Decrypt the message after the IV
+    if (aes_decrypt(receive_buffer + AES_BLOCK_SIZE, decrypted_data, iv) != 0) {
+>>>>>>> Stashed changes
         printf("Error: Decryption failed\n");
         return;
     }
 
     // Increment the sequence number by 1
     uint32_t seq_num;
+<<<<<<< Updated upstream
     memcpy(&seq_num, decrypted_data, sizeof(seq_num)); // Extract sequence number
     seq_num += 1; // Increment sequence number
 
@@ -305,12 +321,27 @@ void process_validate() {
     // Encrypt the response data
     uint8_t encrypted_response[sizeof(decrypted_data) + AES_BLOCK_SIZE]; // Adjust for potential padding due to encryption
     if (encrypt_message(decrypted_data, sizeof(decrypted_data), encrypted_response, iv) != SUCCESS_RETURN) {
+=======
+    memcpy(&seq_num, decrypted_data, sizeof(seq_num));
+    seq_num += 1;
+
+    // Re-encrypt the message with the new sequence number
+    memcpy(decrypted_data, &seq_num, sizeof(seq_num));
+    
+    uint8_t encrypted_response[sizeof(decrypted_data) + AES_BLOCK_SIZE];
+    if (aes_encrypt(decrypted_data, encrypted_response, iv) != 0) {
+>>>>>>> Stashed changes
         printf("Error: Encryption failed\n");
         return;
     }
 
+<<<<<<< Updated upstream
     // Send the encrypted response back
     send_packet_and_ack(sizeof(encrypted_response), encrypted_response);
+=======
+    // Send the encrypted response back to the AP
+    secure_send(encrypted_response, sizeof(encrypted_response));
+>>>>>>> Stashed changes
 }
 
 void process_attest() {

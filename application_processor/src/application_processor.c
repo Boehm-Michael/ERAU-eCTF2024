@@ -126,14 +126,15 @@ int secure_send(uint8_t address, byte* buffer, int len, Aes* aes) {
     byte encryptedBuffer[MAX_BUFFER_SIZE]; // Ensure this buffer is large enough for the encrypted data
 
     // Assuming the AES key has already been securely exchanged and initialized in `aes`
-    wc_AesSetKey(aes, aes_key, AES_KEY_SIZE, iv, AES_ENCRYPTION);
+    wc_AesSetKey(aes, aesKey, AES_KEY_SIZE, iv, AES_ENCRYPTION);
     wc_AesCbcEncrypt(aes, encryptedBuffer, buffer, len);
 
     // Now `encryptedBuffer` contains the encrypted data, which can be sent using `send_packet`
-    send_packet(address, encryptedBuffer, len); // Adjust len as needed based on encryption
+    // send_packet(address, encryptedBuffer, len); // Adjust len as needed based on encryption
 
     return 0; // Simplified return for example purposes
 }
+
 
 /**
  * @brief Secure Receive
@@ -150,10 +151,10 @@ int secure_receive(i2c_addr_t address, byte* buffer, Aes* aes) {
     byte encryptedBuffer[MAX_BUFFER_SIZE]; // Buffer to receive encrypted data
 
     // Receive the encrypted data
-    int receivedLen = poll_and_receive_packet(address, encryptedBuffer);
+    // int receivedLen = poll_and_receive_packet(address, encryptedBuffer);
 
     // Assuming the AES key has already been securely exchanged and initialized in `aes`
-    wc_AesSetKey(aes, aes_key, AES_KEY_SIZE, iv, AES_DECRYPTION);
+    wc_AesSetKey(aes, aesKey, AES_KEY_SIZE, iv, AES_DECRYPTION);
     wc_AesCbcDecrypt(aes, buffer, encryptedBuffer, receivedLen); // Adjust `receivedLen` as needed
 
     return receivedLen; // Simplified return for example purposes
@@ -176,6 +177,9 @@ int get_provisioned_ids(uint32_t* buffer) {
 }
 
 /********************************* UTILITIES **********************************/
+
+static const byte hardcoded_secret[] = { /* ... secret bytes ... */ };
+byte aes_key[SHA256_DIGEST_SIZE]; // Use SHA256 hash size for the key
 
 int derive_key_from_secret() {
     // If the hardcoded secret is not the correct length, hash it to get the key
@@ -213,26 +217,6 @@ int encrypt_message(const byte* plaintext, int plaintext_len, byte* ciphertext, 
     }
 
     ret = wc_AesCbcEncrypt(&aes, ciphertext, plaintext, plaintext_len);
-    wc_AesFree(&aes);
-
-    return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
-}
-
-int decrypt_message(const byte* ciphertext, int ciphertext_len, byte* plaintext, const byte* iv) {
-    // Initialize AES context for decryption
-    Aes aes;
-    int ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
-    if (ret != 0) return ERROR_RETURN;
-
-    // Set the AES key and IV for decryption
-    ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, iv, AES_DECRYPTION);
-    if (ret != 0) {
-        wc_AesFree(&aes);
-        return ERROR_RETURN;
-    }
-
-    // Decrypt the ciphertext
-    ret = wc_AesCbcDecrypt(&aes, plaintext, ciphertext, ciphertext_len);
     wc_AesFree(&aes);
 
     return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
@@ -394,6 +378,7 @@ int validate_components() {
         }
         //Logic for sequence number reuse goes here.
     }
+
     return SUCCESS_RETURN;
 }
 
