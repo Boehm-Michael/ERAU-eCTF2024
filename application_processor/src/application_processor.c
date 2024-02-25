@@ -28,6 +28,7 @@
 #include "simple_flash.h"
 #include "host_messaging.h"
 #include "simple_crypto.h"
+#include "CCSDS.h" 
 
 #ifdef POST_BOOT
 #include <stdint.h>
