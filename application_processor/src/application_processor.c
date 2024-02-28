@@ -57,7 +57,8 @@
 #define AES_KEY_SIZE 32 // For AES-256
 #define MAX_BUFFER_SIZE 1024 // Might need adjustment
 
-
+byte* iv[AES_BLOCK_SIZE] = {56, 12, 23, 55, 12, 66, 12, 87, 3, 12, 14, 76, 45, 23, 45, 12}; // AES_BLOCK_SIZE is typically 16 bytes for AES
+    
 // Flash Macros
 #define FLASH_ADDR ((MXC_FLASH_MEM_BASE + MXC_FLASH_MEM_SIZE) - (2 * MXC_FLASH_PAGE_SIZE))
 #define FLASH_MAGIC 0xDEADBEEF
@@ -106,8 +107,8 @@ typedef enum {
 // Variable for information stored in flash memory
 flash_entry flash_status;
 byte aes_key[AES_KEY_SIZE] = { /* Initialize with AES key bytes */ };
-byte iv[AES_BLOCK_SIZE]; // AES_BLOCK_SIZE is typically 16 bytes for AES
-static const byte hardcoded_secret[] = { /* ... secret bytes ... */ };
+
+static const byte hardcoded_secret[] = {SECRET};
 
 /******************************* POST BOOT FUNCTIONALITY *********************************/
 /**
@@ -212,19 +213,21 @@ int generate_random_message(byte* message, int message_len) {
 }
 
 int encrypt_message(const byte* plaintext, int plaintext_len, byte* ciphertext, byte* iv) {
-    // Generate a random IV
-    RNG rng;
-    int ret = wc_InitRng(&rng);
-    if (ret != 0) return ERROR_RETURN;
+    print_debug("Encrpyting message...");
+    // Generate a random IV (TODO)
+    // RNG rng;
+    // int ret = wc_InitRng(&rng);
+    // if (ret != 0) return ERROR_RETURN;
 
-    ret = wc_RNG_GenerateBlock(&rng, iv, AES_BLOCK_SIZE);
-    wc_FreeRng(&rng);
-    if (ret != 0) return ERROR_RETURN;
-
+    // ret = wc_RNG_GenerateBlock(&rng, iv, AES_BLOCK_SIZE);
+    
+    // wc_FreeRng(&rng);
+    // if (ret != 0) return ERROR_RETURN;
+    byte* vi[AES_BLOCK_SIZE] = {56, 12, 23, 55, 12, 66, 12, 87, 3, 12, 14, 76, 45, 23, 45, 12}; // AES_BLOCK_SIZE is typically 16 bytes for AES
     // Encrypt the plaintext
     Aes aes;
     wc_AesInit(&aes, NULL, INVALID_DEVID);
-    ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, iv, AES_ENCRYPTION);
+    int ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, vi, AES_ENCRYPTION);
     if (ret != 0) {
         wc_AesFree(&aes);
         return ERROR_RETURN;
@@ -233,10 +236,12 @@ int encrypt_message(const byte* plaintext, int plaintext_len, byte* ciphertext, 
     ret = wc_AesCbcEncrypt(&aes, ciphertext, plaintext, plaintext_len);
     wc_AesFree(&aes);
 
+    print_debug("Finished encrypting.");
     return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
 }
 
 int decrypt_message(const byte* ciphertext, int ciphertext_len, byte* plaintext, const byte* iv) {
+    print_debug("Decrypting Message");
     // Initialize AES context for decryption
     Aes aes;
     int ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
@@ -252,7 +257,7 @@ int decrypt_message(const byte* ciphertext, int ciphertext_len, byte* plaintext,
     // Decrypt the ciphertext
     ret = wc_AesCbcDecrypt(&aes, plaintext, ciphertext, ciphertext_len);
     wc_AesFree(&aes);
-
+    print_debug("Finished Decrypting.");
     return ret == 0 ? SUCCESS_RETURN : ERROR_RETURN;
 }
 
@@ -341,75 +346,94 @@ int scan_components() {
 
 int validate_components() {
     // Derive the key from the hardcoded secret
+    print_debug("Attempting Key Derivation");
     if (derive_key_from_secret() != SUCCESS_RETURN) {
         print_error("Key derivation failed\n");
         return ERROR_RETURN;
     }
 
     // Buffers for board link communication
-    uint8_t receive_buffer[MAX_I2C_MESSAGE_LEN];
-    uint8_t transmit_buffer[MAX_I2C_MESSAGE_LEN];
+    byte receive_buffer[MAX_I2C_MESSAGE_LEN];
+    byte transmit_buffer[MAX_I2C_MESSAGE_LEN];
 
     // Iterate over each component
     for (unsigned i = 0; i < flash_status.component_cnt; i++) {
         // Generate a random starting sequence number
-        uint32_t random_seq_num;
-        RNG rng;
-        wc_InitRng(&rng);
-        wc_RNG_GenerateBlock(&rng, (byte*)&random_seq_num, sizeof(random_seq_num));
-        wc_FreeRng(&rng);
+        uint32_t random_seq_num = 5;
+        // RNG rng;
+        // wc_InitRng(&rng);
+        // wc_RNG_GenerateBlock(&rng, (byte*)&random_seq_num, sizeof(random_seq_num));
+        // wc_FreeRng(&rng);
 
-        // Generate a random message
-        byte random_message[16];
-        if (generate_random_message(random_message, sizeof(random_message)) != SUCCESS_RETURN) {
-            print_error("Random message generation failed\n");
-            return ERROR_RETURN;
-        }
+        // Generate a random message (TODO)
+        byte random_message[16] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+        // if (generate_random_message(random_message, sizeof(random_message)) != SUCCESS_RETURN) {
+        //     print_error("Random message generation failed\n");
+        //     return ERROR_RETURN;
+        // }
+
+        char testBuf[100];
 
         // Set the I2C address of the component
+        print_debug("Creating I2C Address");
         i2c_addr_t addr = component_id_to_i2c_addr(flash_status.component_ids[i]);
 
         // Prepare the data to send (random_seq_num + random_message)
         byte data_to_send[20]; // 4 bytes of seq_num + 16 bytes of message
-        memcpy(data_to_send, &random_seq_num, sizeof(random_seq_num));
+        memcpy(data_to_send, random_seq_num, sizeof(random_seq_num));
         memcpy(data_to_send + sizeof(random_seq_num), random_message, sizeof(random_message));
+        
+        sprintf(testBuf, "Data to send: %x", data_to_send);
+        print_debug(testBuf);
 
         // Encrypt the data
+        print_debug("Trying encrypt");
         byte iv[AES_BLOCK_SIZE];
         byte encrypted_data[sizeof(data_to_send) + AES_BLOCK_SIZE]; // Account for padding
         if (encrypt_message(data_to_send, sizeof(data_to_send), encrypted_data, iv) != SUCCESS_RETURN) {
             print_error("Data encryption failed\n");
             return ERROR_RETURN;
         }
-
+        print_debug("Exited encrypt");
+        sprintf(testBuf, "Encrypted Data: %x", encrypted_data);
+        print_debug(testBuf);
         // Send the encrypted data and IV to the component
         memcpy(transmit_buffer, encrypted_data, sizeof(encrypted_data));
         memcpy(transmit_buffer + sizeof(encrypted_data), iv, AES_BLOCK_SIZE);
+        print_debug("Issuing command");
+        
+        sprintf(testBuf, "Transmitted: %x", transmit_buffer);
+        print_debug(testBuf);
         int len = issue_cmd(addr, transmit_buffer, receive_buffer);
+        print_debug("Command Issued");
+        // print_debug("%d", len);
         if (len == ERROR_RETURN) {
             print_error("Could not validate component\n");
             return ERROR_RETURN;
         }
-
+        print_debug("Got Return Success");
         // Decrypt the response
+        print_debug("Starting decrypt");
         byte decrypted_response[sizeof(data_to_send)];
         if (decrypt_message(receive_buffer, len - AES_BLOCK_SIZE, decrypted_response, iv) != SUCCESS_RETURN) {
             print_error("Response decryption failed\n");
             return ERROR_RETURN;
         }
-
+        print_debug("Ended the life of decrypt");
         // Extract the sequence number and message from the decrypted response
         uint32_t received_seq_num;
         byte received_message[16];
         memcpy(&received_seq_num, decrypted_response, sizeof(received_seq_num));
         memcpy(received_message, decrypted_response + sizeof(received_seq_num), sizeof(received_message));
-
+        print_debug("End memcpy");
         // Check that the sequence number is incremented by 1 and the message is the same
+        print_debug("Start compare seq num");
         if (received_seq_num != random_seq_num + 1 || 
             memcmp(received_message, random_message, sizeof(received_message)) != 0) {
             print_error("Component validation failed\n");
             return ERROR_RETURN;
         }
+        print_debug("Success");
         //Logic for sequence number reuse goes here.
     }
     return SUCCESS_RETURN;
@@ -476,38 +500,6 @@ void boot() {
     // Example of how to utilize included simple_crypto.h
     // This string is 16 bytes long including null terminator
     // This is the block size of included symmetric encryption
-    char* data = "Crypto Example!";
-    uint8_t ciphertext[BLOCK_SIZE];
-    uint8_t key[KEY_SIZE];
-    
-    // Zero out the key
-    bzero(key, BLOCK_SIZE); // Sets key to all 0s... this is bad... obviously - Michael
-
-    
-    /***************************** EXAMPLE CRYPTO *******************************/
-    //
-    //
-    // This shows how to use the WolfSSL library, do not use in secure_receive
-    // or secure_send.
-    //
-    /****************************** EXAMPLE CRYPTO *******************************/
-    // Encrypt example data and print out
-    encrypt_sym((uint8_t*)data, BLOCK_SIZE, key, ciphertext); 
-    print_debug("Encrypted data: ");
-    print_hex_debug(ciphertext, BLOCK_SIZE);
-
-    // Hash example encryption results 
-    uint8_t hash_out[HASH_SIZE];
-    hash(ciphertext, BLOCK_SIZE, hash_out);
-
-    // Output hash result
-    print_debug("Hash result: ");
-    print_hex_debug(hash_out, HASH_SIZE);
-    
-    // Decrypt the encrypted message and print out
-    uint8_t decrypted[BLOCK_SIZE];
-    decrypt_sym(ciphertext, BLOCK_SIZE, key, decrypted);
-    print_debug("Decrypted message: %s\r\n", decrypted);
 
     // POST BOOT FUNCTIONALITY
     // DO NOT REMOVE IN YOUR DESIGN
@@ -559,6 +551,7 @@ int validate_token() {
 
 // Boot the components and board if the components validate
 void attempt_boot() {
+    print_debug("Attempting boot...");
     if (validate_components()) {
         print_error("Components could not be validated\n");
         return;

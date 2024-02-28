@@ -91,7 +91,7 @@ void process_attest(void);
 // Global varaibles
 uint8_t receive_buffer[MAX_I2C_MESSAGE_LEN];
 uint8_t transmit_buffer[MAX_I2C_MESSAGE_LEN];
-static const byte hardcoded_secret[] = { /* ... secret bytes ... */ };
+static const byte hardcoded_secret[] = {SECRET};
 byte aes_key[SHA256_DIGEST_SIZE]; // Use SHA256 hash size for the key
 byte iv[AES_BLOCK_SIZE]; // AES_BLOCK_SIZE is typically 16 bytes for AES
 /******************************* POST BOOT FUNCTIONALITY *********************************/
@@ -148,18 +148,18 @@ int secure_receive(uint8_t* buffer) {
 
 int encrypt_message(const byte* plaintext, int plaintext_len, byte* ciphertext, byte* iv) {
     // Generate a random IV
-    RNG rng;
-    int ret = wc_InitRng(&rng);
-    if (ret != 0) return ERROR_RETURN;
+    // RNG rng;
+    // int ret = wc_InitRng(&rng);
+    // if (ret != 0) return ERROR_RETURN;
 
-    ret = wc_RNG_GenerateBlock(&rng, iv, AES_BLOCK_SIZE);
-    wc_FreeRng(&rng);
-    if (ret != 0) return ERROR_RETURN;
+    // int ret = wc_RNG_GenerateBlock(&rng, iv, AES_BLOCK_SIZE);
+    // wc_FreeRng(&rng);
+    // if (ret != 0) return ERROR_RETURN;
 
     // Encrypt the plaintext
     Aes aes;
     wc_AesInit(&aes, NULL, INVALID_DEVID);
-    ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, iv, AES_ENCRYPTION);
+    int ret = wc_AesSetKey(&aes, aes_key, AES_256_KEY_SIZE, iv, AES_ENCRYPTION);
     if (ret != 0) {
         wc_AesFree(&aes);
         return ERROR_RETURN;
